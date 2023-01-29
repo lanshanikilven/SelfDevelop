@@ -14,7 +14,7 @@ def TransposeOp : Tiny_Op<"transpose", [NoSideEffect]> {
 
   // Allow building a TransposeOp with from the input operand.
   let builders = [
-    OpBuilder<(ins  "Value": $input)>
+    OpBuilder<(ins  "mlir::Value": $input)>
   ];
   let hasCanonicalizer = 1;
   // Invoke a static verify method to verify this transpose operation.

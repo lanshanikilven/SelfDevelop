@@ -211,6 +211,42 @@ private:
     return builder.create<ConstantOp>(loc(lit.loc()), type, dataAttribute);
   }
 
+  mlir::Value mlirGen(CallExprAST &call) {
+    llvm::StringRef callee = call.getCallee();
+    auto location = loc(call.loc());
+
+    // Codegen the operands first.
+    SmallVector<mlir::Value, 4> operands;
+    for (auto &expr : call.getArgs()) {
+      auto arg = mlirGen(*expr);
+      if (!arg)
+        return nullptr;
+      operands.push_back(arg);
+    }
+
+    // Builting calls have their custom operation, meaning this is a
+    // straightforward emission.
+    if (callee == "transpose") {
+      if (call.getArgs().size() != 1) {
+        emitError(location, "MLIR codegen encountered an error: toy.transpose "
+                            "does not accept multiple arguments");
+        return nullptr;
+      }
+      return builder.create<TransposeOp>(location, operands[0]);
+    }
+
+  // Otherwise this is a call to a user-defined function. Calls to ser-defined
+  // functions are mapped to a custom call that takes the callee name as an
+  // attribute.
+  //return builder.create<GenericCallOp>(location, callee, operands);
+}
+/*
+mlir::Value mlirGen(VarExprAST &call) {
+  return builder.create<ConstantOp>(loc(call.loc()), call.getStr());
+  //return call.getStr();
+}
+*/
+
   /// Dispatch codegen for the right expression subclass using RTTI.
   mlir::Value mlirGen(ExprAST &expr) {
     switch (expr.getKind()) {
@@ -220,6 +256,10 @@ private:
       return mlirGen(cast<NumberExprAST>(expr));
     case tiny::ExprAST::Expr_Literal:
       return mlirGen(cast<LiteralExprAST>(expr));
+    case tiny::ExprAST::Expr_Call:
+      return mlirGen(cast<CallExprAST>(expr));
+    //case tiny::ExprAST::Expr_Var:
+      //return mlirGen(cast<VarExprAST>(expr));
     default:
       emitError(loc(expr.loc()))
           << "MLIR codegen encountered an unhandled expr kind '"
@@ -246,7 +286,16 @@ private:
           return mlir::success();
         continue;
       }
-
+      if (auto *transpose = dyn_cast<CallExprAST>(expr.get())) {
+        if (mlirGen(*transpose))
+          return mlir::success();
+        continue;
+      }
+      // if (auto *var = dyn_cast<VarExprAST>(expr.get())) {
+      //   if (mlirGen(*var))
+      //     return mlir::success();
+      //   continue;
+      // }
       // Generic expression dispatch codegen.
       if (!mlirGen(*expr))
         return mlir::failure();

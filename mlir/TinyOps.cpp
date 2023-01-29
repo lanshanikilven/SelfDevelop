@@ -27,6 +27,11 @@ struct SimplifyRedundantTranspose : public mlir::OpRewritePattern<tiny::Transpos
   }
 };
 
+void TransposeOp::build(mlir::OpBuilder &builder, mlir::OperationState &state, mlir::Value value) {
+  state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
+  state.addOperands(value);
+}
+
 //===----------------------------------------------------------------------===//
 // ConstantOp
 

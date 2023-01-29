@@ -85,6 +85,21 @@ public:
   static bool classof(const ExprAST *c) {return c->getKind() == Expr_String; }
 };
 
+/*
+/// VarExprAST - Expression class for var/in
+class VarExprAST : public ExprAST {
+  std::string Val;
+
+public:
+  VarExprAST(Location loc, std::string val): ExprAST(Expr_Var, loc), Val(val) {
+
+  }
+  std::string getStr() {return Val;}
+  /// LLVM style RTTI
+  static bool classof(const ExprAST *c) {return c->getKind() == Expr_Var; }
+};
+*/
+
 /// Expression class for a literal value.
 class LiteralExprAST : public ExprAST {
   std::vector<std::unique_ptr<ExprAST>> values;
