@@ -178,9 +178,9 @@ int loadAndProcessMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef& module
   module->dump();
   //注意这些pass的变化，针对的都是ModuleOp
   passManager.addPass(mlir::createCanonicalizerPass());
-  passManager.addPass(mlir::tiny::createLowerToAffinePass());
-  passManager.addPass(mlir::tiny::createLowerToLLVMPass());
-  passManager.addPass(mlir::createCSEPass());
+  //passManager.addPass(mlir::tiny::createLowerToAffinePass());
+  //passManager.addPass(mlir::tiny::createLowerToLLVMPass());
+  //passManager.addPass(mlir::createCSEPass());
   //下面这两个是MLIR自带的pass，分别完成了相同循环边界融合优化和对于MemRef的数据流优化功能。
   //mlir::OpPassManager &optPM = passManager.nest<mlir::FuncOp>();
   //createLoopFusionPass这个pass需要在FuncOp进行变换，所有需要先嵌套一层
@@ -194,8 +194,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef& module
   return 0;
 }
 
-
-
 int main(int argc, char** argv) {
     // Register any command line options.
     mlir::registerAsmPrinterCLOptions();
@@ -206,15 +204,15 @@ int main(int argc, char** argv) {
     if (emitAction >= Action::DumpLLVMFROMMLIR){
         std::cout << "BBBBBBBBBBBBBBBB" <<std::endl;
         context.getOrLoadDialect<mlir::tiny::TinyDialect>();
-        context.getOrLoadDialect<mlir::StandardOpsDialect>();
-        context.getOrLoadDialect<mlir::BuiltinDialect>();
+        //context.getOrLoadDialect<mlir::StandardOpsDialect>();
         mlir::OwningModuleRef module;
         if (int error = loadAndProcessMLIR(context, module)) {
           return error;
         }
         std::cout << "44444444444444" << std::endl;
-        dumpLLVMIR(*module);
-        runJIT(*module);
+        //dumpLLVMIR(*module);
+        //runJIT(*module);
+        module->dump();
         return 0;
     } 
     // the following code is designed for DSL for future.
