@@ -177,12 +177,12 @@ int loadAndProcessMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef& module
   //注意这些pass的变化，针对的都是ModuleOp
   passManager.addPass(mlir::tiny::createLowerToAffinePass());
   passManager.addPass(mlir::tiny::createLowerToLLVMPass());
-  //passManager.addNestedPass<mlir::StandardOpsDialect>(mlir::createCanonicalizerPass());
+  passManager.addPass(mlir::createCanonicalizerPass());
   passManager.addPass(mlir::createCSEPass());
   //下面这两个是MLIR自带的pass，分别完成了相同循环边界融合优化和对于MemRef的数据流优化功能。
-  mlir::OpPassManager &optPM = passManager.nest<mlir::FuncOp>();
+  //mlir::OpPassManager &optPM = passManager.nest<mlir::FuncOp>();
   //createLoopFusionPass这个pass需要在FuncOp进行变换，所有需要先嵌套一层
-  optPM.addPass(mlir::createLoopFusionPass());
+  //optPM.addPass(mlir::createLoopFusionPass());
   //passManager.addPass(mlir::createMemRefDataFlowOptPass());
 
   if (mlir::failed(passManager.run(*module))) {

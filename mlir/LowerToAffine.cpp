@@ -25,22 +25,20 @@
 #include "mlir/IR/BuiltinOps.h.inc"
 #include "mlir/IR/BuiltinDialect.h.inc"
 
-using namespace mlir;
-
 //===----------------------------------------------------------------------===//
 // ToyToAffine RewritePatterns
 //===----------------------------------------------------------------------===//
 
 /// Convert the given TensorType into the corresponding MemRefType.
-static MemRefType convertTensorToMemRef(TensorType type) {
+static mlir::MemRefType convertTensorToMemRef(mlir::TensorType type) {
   assert(type.hasRank() && "expected only ranked shapes");
-  return MemRefType::get(type.getShape(), type.getElementType());
+  return mlir::MemRefType::get(type.getShape(), type.getElementType());
 }
 
 /// Insert an allocation and deallocation for the given MemRefType.
-static Value insertAllocAndDealloc(MemRefType type, Location loc,
-                                   PatternRewriter &rewriter) {
-  auto alloc = rewriter.create<memref::AllocOp>(loc, type);
+static mlir::Value insertAllocAndDealloc(mlir::MemRefType type, mlir::Location loc,
+                                   mlir::PatternRewriter &rewriter) {
+  auto alloc = rewriter.create<mlir::memref::AllocOp>(loc, type);
 
   // Make sure to allocate at the beginning of the block.
   auto *parentBlock = alloc->getBlock();
@@ -48,29 +46,21 @@ static Value insertAllocAndDealloc(MemRefType type, Location loc,
 
   // Make sure to deallocate this alloc at the end of the block. This is fine
   // as toy functions have no control flow.
-  auto dealloc = rewriter.create<memref::DeallocOp>(loc, alloc);
+  auto dealloc = rewriter.create<mlir::memref::DeallocOp>(loc, alloc);
   dealloc->moveBefore(&parentBlock->back());
   return alloc;
 }
 
-namespace {
-  
+struct ConstantOpLowering : public mlir::OpRewritePattern<mlir::tiny::ConstantOp> {
+  using OpRewritePattern<mlir::tiny::ConstantOp>::OpRewritePattern;
 
-//===----------------------------------------------------------------------===//
-// ToyToAffine RewritePatterns: Constant operations
-//===----------------------------------------------------------------------===//
-
-struct ConstantOpLowering : public OpRewritePattern<tiny::ConstantOp> {
-  using OpRewritePattern<tiny::ConstantOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(tiny::ConstantOp op,
-                                PatternRewriter &rewriter) const final {
-    DenseElementsAttr constantValue = op.value();
-    Location loc = op.getLoc();
+  mlir::LogicalResult matchAndRewrite(mlir::tiny::ConstantOp op, mlir::PatternRewriter &rewriter) const final {
+    mlir::DenseElementsAttr constantValue = op.value();
+    mlir::Location loc = op.getLoc();
 
     // When lowering the constant operation, we allocate and assign the constant
     // values to a corresponding memref allocation.
-    auto tensorType = op.getType().cast<TensorType>();
+    auto tensorType = op.getType().cast<mlir::TensorType>();
     auto memRefType = convertTensorToMemRef(tensorType);
     auto alloc = insertAllocAndDealloc(memRefType, loc, rewriter);
 
@@ -78,28 +68,28 @@ struct ConstantOpLowering : public OpRewritePattern<tiny::ConstantOp> {
     // Create these constants up-front to avoid large amounts of redundant
     // operations.
     auto valueShape = memRefType.getShape();
-    SmallVector<Value, 8> constantIndices;
+    mlir::SmallVector<mlir::Value, 8> constantIndices;
 
     if (!valueShape.empty()) {
       for (auto i : llvm::seq<int64_t>(
                0, *std::max_element(valueShape.begin(), valueShape.end())))
-        constantIndices.push_back(rewriter.create<ConstantIndexOp>(loc, i));
+        constantIndices.push_back(rewriter.create<mlir::ConstantIndexOp>(loc, i));
     } else {
       // This is the case of a tensor of rank 0.
-      constantIndices.push_back(rewriter.create<ConstantIndexOp>(loc, 0));
+      constantIndices.push_back(rewriter.create<mlir::ConstantIndexOp>(loc, 0));
     }
     // The constant operation represents a multi-dimensional constant, so we
     // will need to generate a store for each of the elements. The following
     // functor recursively walks the dimensions of the constant shape,
     // generating a store when the recursion hits the base case.
-    SmallVector<Value, 2> indices;
-    auto valueIt = constantValue.getValues<IntegerAttr>().begin();
+    mlir::SmallVector<mlir::Value, 2> indices;
+    auto valueIt = constantValue.getValues<mlir::IntegerAttr>().begin();
     std::function<void(uint64_t)> storeElements = [&](uint64_t dimension) {
       // The last dimension is the base case of the recursion, at this point
       // we store the element at the given index.
       if (dimension == valueShape.size()) {
-        rewriter.create<AffineStoreOp>(
-            loc, rewriter.create<ConstantOp>(loc, *valueIt++), alloc,
+        rewriter.create<mlir::AffineStoreOp>(
+            loc, rewriter.create<mlir::ConstantOp>(loc, *valueIt++), alloc,
             llvm::makeArrayRef(indices));
         return;
       }
@@ -118,31 +108,24 @@ struct ConstantOpLowering : public OpRewritePattern<tiny::ConstantOp> {
 
     // Replace this operation with the generated alloc.
     rewriter.replaceOp(op, alloc);
-    return success();
+    return mlir::success();
   }
 };
 
-//===----------------------------------------------------------------------===//
-// ToyToAffine RewritePatterns: Return operations
-//===----------------------------------------------------------------------===//
 
-struct ReturnOpLowering : public OpRewritePattern<tiny::ReturnOp> {
-  using OpRewritePattern<tiny::ReturnOp>::OpRewritePattern;
+struct ReturnOpLowering : public mlir::OpRewritePattern<mlir::tiny::ReturnOp> {
+  using OpRewritePattern<mlir::tiny::ReturnOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(tiny::ReturnOp op,
-                                PatternRewriter &rewriter) const final {
-    // During this lowering, we expect that all function calls have been
-    // inlined.
+  mlir::LogicalResult matchAndRewrite(mlir::tiny::ReturnOp op, mlir::PatternRewriter &rewriter) const final {
+    // During this lowering, we expect that all function calls have been inlined.
     if (op.hasOperand())
-      return failure();
+      return mlir::failure();
 
     // We lower "toy.return" directly to "std.return".
-    rewriter.replaceOpWithNewOp<ReturnOp>(op);
-    return success();
+    rewriter.replaceOpWithNewOp<mlir::ReturnOp>(op);
+    return mlir::success();
   }
 };
-
-} // end anonymous namespace.
 
 //===----------------------------------------------------------------------===//
 // ToyToAffineLoweringPass
@@ -152,9 +135,9 @@ struct ReturnOpLowering : public OpRewritePattern<tiny::ReturnOp> {
 /// computationally intensive (like matmul for example...) while keeping the
 /// rest of the code in the Toy dialect.
 namespace {
-struct ToyToAffineLoweringPass : public PassWrapper<ToyToAffineLoweringPass, mlir::OperationPass<mlir::ModuleOp>> {
-  void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<AffineDialect, memref::MemRefDialect, StandardOpsDialect>();
+struct ToyToAffineLoweringPass : public mlir::PassWrapper<ToyToAffineLoweringPass, mlir::OperationPass<mlir::ModuleOp>> {
+  void getDependentDialects(mlir::DialectRegistry &registry) const override {
+    registry.insert<mlir::AffineDialect, mlir::memref::MemRefDialect, mlir::StandardOpsDialect>();
   }
   void runOnOperation() final;
 };
@@ -174,36 +157,36 @@ void ToyToAffineLoweringPass::runOnOperation() {
   //   return signalPassFailure();
   // }
 
-  // The first thing to define is the conversion target. This will define the
-  // final target for this lowering.
-  ConversionTarget target(getContext());
+  // The first thing to is defining the conversion target for this lowering.
+  // getContext()函数是Pass基类中的一个纯虚函数，所有自定义的Pass都会继承自该Pass基类
+  mlir::ConversionTarget target(getContext());
 
-  // We define the specific operations, or dialects, that are legal targets for
-  // this lowering. In our case, we are lowering to a combination of the
-  // `Affine`, `MemRef` and `Standard` dialects.
-  target.addLegalDialect<AffineDialect, memref::MemRefDialect, BuiltinDialect, StandardOpsDialect>();
+  // We define the specific operations, or dialects, that are legal targets for this lowering. 
+  // 这里声明了lower过程中能够合法使用的dialect，需要将非法dialect中的op转换到这些dialect中的合法op
+  target.addLegalDialect<mlir::AffineDialect, mlir::memref::MemRefDialect, mlir::BuiltinDialect, mlir::StandardOpsDialect>();
 
-  // We also define the Toy dialect as Illegal so that the conversion will fail
-  // if any of these operations are *not* converted. Given that we actually want
-  // a partial lowering, we explicitly mark the Toy operations that don't want
-  // to lower, `toy.print`, as `legal`.
-  target.addIllegalDialect<tiny::TinyDialect>();
-  target.addLegalOp<tiny::PrintOp>();     //从187-191行，仅仅是定义了我们转换的Target目标，但是具体的转换过程并不在这里，需要在下面的rewritePatternSet里面来定义具体的转换过程
+  // We also define the TinyDialect as illegal so that the conversion will fail if any of these operations are not converted. 
+  // we explicitly mark the PrintOp that don't want to be lowered, `tiny.print`, as `legal`.
+  target.addIllegalDialect<mlir::tiny::TinyDialect>();
+  target.addLegalOp<mlir::tiny::PrintOp>(); 
+  // 至此从187-191行，仅仅定义了我们转换的Target目标，或者说相当于转换了namespace
+  // 但是具体的转换过程并不在这里，需要在下面的rewritePatternSet里面来定义具体的转换过程
 
   // Now that the conversion target has been defined, we just need to provide
   // the set of patterns that will lower the Toy operations.
-  RewritePatternSet patterns(&getContext());
+  mlir::RewritePatternSet patterns(&getContext());
   patterns.add<ConstantOpLowering, ReturnOpLowering>(&getContext());  //这里添加了两种rewrite patterns，里面定义了怎么将输入的IR转换成我们期望的IR
 
   // With the target and rewrite patterns defined, we can now attempt the
   // conversion. The conversion will signal failure if any of our `illegal`
   // operations were not converted successfully.
-  if (failed(applyPartialConversion(getOperation(), target, std::move(patterns))))
-    signalPassFailure();      //这里就是在使用转换接口，注意是采用了部分转换的模式
+  // 这里执行部分转换，会保留没有被标记为illegal的operations，转换完成后，隶属于不同dialect的op可以共存在一个大的FuncOp或者ModuleOp中
+  if (mlir::failed(mlir::applyPartialConversion(getOperation(), target, std::move(patterns))))
+    signalPassFailure(); 
 }
 
 /// Create a pass for lowering operations in the `Affine` and `Std` dialects,
 /// for a subset of the Toy IR (e.g. matmul).
-std::unique_ptr<Pass> mlir::tiny::createLowerToAffinePass() {
+std::unique_ptr<mlir::Pass> mlir::tiny::createLowerToAffinePass() {
   return std::make_unique<ToyToAffineLoweringPass>();
 }
