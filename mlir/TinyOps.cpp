@@ -6,6 +6,7 @@
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/OpImplementation.h"
 #include "mlir/IR/PatternMatch.h"
+#include <iostream>
 
 
 using namespace mlir;
@@ -17,6 +18,8 @@ struct SimplifyRedundantTranspose : public mlir::OpRewritePattern<tiny::Transpos
   LogicalResult matchAndRewrite(tiny::TransposeOp op,
                                 PatternRewriter &rewriter) const final {
     mlir::Value transposeInput = op.getOperand();
+
+    std::cout << "333333333333333" << std::endl;
     tiny::TransposeOp transposeInputOp = transposeInput.getDefiningOp<tiny::TransposeOp>();
     if (!transposeInputOp) {
       return failure();

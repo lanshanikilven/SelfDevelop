@@ -55,7 +55,7 @@ struct ConstantOpLowering : public mlir::OpRewritePattern<mlir::tiny::ConstantOp
   using OpRewritePattern<mlir::tiny::ConstantOp>::OpRewritePattern;
 
   mlir::LogicalResult matchAndRewrite(mlir::tiny::ConstantOp op, mlir::PatternRewriter &rewriter) const final {
-    mlir::DenseElementsAttr constantValue = op.value();
+    mlir::DenseIntElementsAttr constantValue = op.value();
     mlir::Location loc = op.getLoc();
 
     // When lowering the constant operation, we allocate and assign the constant
@@ -127,6 +127,7 @@ struct ReturnOpLowering : public mlir::OpRewritePattern<mlir::tiny::ReturnOp> {
   }
 };
 
+
 //===----------------------------------------------------------------------===//
 // ToyToAffineLoweringPass
 //===----------------------------------------------------------------------===//
@@ -168,6 +169,7 @@ void ToyToAffineLoweringPass::runOnOperation() {
   // We also define the TinyDialect as illegal so that the conversion will fail if any of these operations are not converted. 
   // we explicitly mark the PrintOp that don't want to be lowered, `tiny.print`, as `legal`.
   target.addIllegalDialect<mlir::tiny::TinyDialect>();
+
   target.addLegalOp<mlir::tiny::PrintOp>(); 
   // 至此从187-191行，仅仅定义了我们转换的Target目标，或者说相当于转换了namespace
   // 但是具体的转换过程并不在这里，需要在下面的rewritePatternSet里面来定义具体的转换过程

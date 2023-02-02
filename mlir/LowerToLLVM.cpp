@@ -47,7 +47,7 @@
 class PrintOpLowering : public mlir::ConversionPattern {
 public:
   explicit PrintOpLowering(mlir::MLIRContext *context)
-      : mlir::ConversionPattern(mlir::tiny::PrintOp::getOperationName(), 1, context) {}
+    : mlir::ConversionPattern(mlir::tiny::PrintOp::getOperationName(), 1, context) {}
 
   mlir::LogicalResult matchAndRewrite(mlir::Operation *op,
                                        mlir::ArrayRef<mlir::Value> operands,
@@ -61,7 +61,7 @@ public:
     // Get a symbol reference to the printf function, inserting it if necessary.
     auto printfRef = getOrInsertPrintf(rewriter, parentModule);
     mlir::Value formatSpecifierCst = getOrCreateGlobalString(
-        loc, rewriter, "frmt_spec", mlir::StringRef("%c\0", 4), parentModule);
+        loc, rewriter, "frmt_spec", mlir::StringRef("%d \0", 4), parentModule);
     mlir::Value newLineCst = getOrCreateGlobalString(
         loc, rewriter, "nl", mlir::StringRef("\n\0", 2), parentModule);
 
@@ -136,8 +136,7 @@ private:
       auto type = mlir::LLVM::LLVMArrayType::get(mlir::IntegerType::get(builder.getContext(), 8), value.size());
       global = builder.create<mlir::LLVM::GlobalOp>(loc, type, /*isConstant=*/true,
                                               mlir::LLVM::Linkage::Internal, name,
-                                              builder.getStringAttr(value),
-                                              /*alignment=*/0);
+                                              builder.getStringAttr(value));
     }
 
     // Get the pointer to the first character in the global string.
@@ -174,7 +173,7 @@ void ToyToLLVMLoweringPass::runOnOperation() {
   // the LLVM dialect.
   mlir::LLVMConversionTarget target(getContext());
   target.addLegalOp<mlir::ModuleOp>();
-
+  target.addLegalOp<mlir::tiny::TransposeOp>();
   // During this lowering, we will also be lowering the MemRef types, that are
   // currently being operated on, to a representation in LLVM. To perform this
   // conversion we use a TypeConverter as part of the lowering. This converter

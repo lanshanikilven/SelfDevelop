@@ -9,9 +9,11 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 def TransposeOp : Tiny_Op<"transpose", [NoSideEffect]> {
   let summary = "transpose operation";
 
-  let arguments = (ins F64Tensor:$input);
-  let results = (outs F64Tensor);
-
+  let arguments = (ins I32Tensor:$input);
+  let results = (outs I32Tensor);
+  let assemblyFormat = [{
+    `(` $input `:` type($input) `)` attr-dict `to` type(results)
+  }];
   // Allow building a TransposeOp with from the input operand.
   let builders = [
     OpBuilder<(ins  "mlir::Value": $input)>
