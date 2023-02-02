@@ -26,6 +26,7 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
+#include <iostream>
 
 using namespace tiny;
 
@@ -35,7 +36,7 @@ static cl::opt<std::string> inputFilename(cl::Positional,
                                           cl::desc("<input tiny file>"),
                                           cl::init("-"),
                                           cl::value_desc("filename"));
-enum Action { None, DumpAST, DumpMLIR, DumpMLIRAffine, DumpMLIRLLVM, RunJIT};
+enum Action { None, DumpAST, DumpMLIR, DumpMLIRAffine, DumpMLIRLLVM, RunJIT, DumpLLVMFROMMLIR};
 
 static cl::opt<enum Action>
     emitAction("emit", cl::desc("Select the kind of output desired"),
@@ -43,8 +44,8 @@ static cl::opt<enum Action>
                cl::values(clEnumValN(DumpMLIR, "mlir", "output the MLIR dump")),
                cl::values(clEnumValN(DumpMLIRLLVM, "mlir-llvm", "output the LLVM dump")),
                cl::values(clEnumValN(DumpMLIRAffine, "mlir-affine", "output the affine pass dump")),
+               cl::values(clEnumValN(DumpLLVMFROMMLIR, "mutate-mlir-to-dst", "mutate MLIR to dst IR")),
                cl::values(clEnumValN(RunJIT, "jit", "JIT the code and run it by invoke the main function")));
-
 
 std::unique_ptr<tiny::ModuleAST> parseInputFile(llvm::StringRef filename) {
   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> fileOrErr =
@@ -85,7 +86,6 @@ int loadMLIR(mlir::MLIRContext& context, mlir::OwningModuleRef& module) {
         pm.addPass(mlir::tiny::createLowerToLLVMPass());
     }
 
-
     if (mlir::failed(pm.run(*module)))
         return -1;
     return 0;
@@ -123,12 +123,100 @@ int runJIT(mlir::ModuleOp module) {
   return 0;
 }
 
+int dumpLLVMIR(mlir::ModuleOp module) {
+  mlir::registerLLVMDialectTranslation(*module->getContext());
+  // Convert the module to LLVM IR in a new LLVM IR context.
+
+  llvm::LLVMContext llvmContext;
+  auto llvmModule = mlir::translateModuleToLLVMIR(module, llvmContext);
+  if (!llvmModule) {
+    llvm::errs() << "Failed to emit LLVM IR\n";
+    return -1;
+  }
+
+  // Initialize LLVM targets.
+  llvm::InitializeNativeTarget();
+  llvm::InitializeNativeTargetAsmPrinter();
+  mlir::ExecutionEngine::setupTargetTriple(llvmModule.get());
+
+  // Optionally run an optimization pipeline over the llvm module.
+  auto optPipeline = mlir::makeOptimizingTransformer(0, 0, nullptr);
+  if (auto err = optPipeline(llvmModule.get())) {
+    llvm::errs() << "Failed to optimize LLVM IR " << err << "\n";
+    return -1;
+  }
+  llvm::outs() << *llvmModule << "\n";
+  return 0;
+}
+
+int loadMLIRFromFile(mlir::MLIRContext &context, mlir::OwningModuleRef& module) {
+    llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> fileOrErr =
+            llvm::MemoryBuffer::getFileOrSTDIN(inputFilename);
+    if (std::error_code ec = fileOrErr.getError()) {
+        llvm::errs() << "Could not open input file: " << ec.message() << "\n";
+        return -1;
+    }
+
+    llvm::SourceMgr sourceMgr;
+    sourceMgr.AddNewSourceBuffer(std::move(*fileOrErr), llvm::SMLoc());
+    module = mlir::parseSourceFile<mlir::ModuleOp>(sourceMgr, &context);
+    if (!module) {
+        llvm::errs() << "Error can't load file " << inputFilename << "\n";
+        return 3;
+    }
+    return 0;
+}
+
+int loadAndProcessMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef& module) {
+  if (int error = loadMLIRFromFile(context, module)) {
+    return error;
+  }
+  // Register passes to be applied in this compile process
+  mlir::PassManager passManager(&context);
+  mlir::applyPassManagerCLOptions(passManager);
+  //注意这些pass的变化，针对的都是ModuleOp
+  passManager.addPass(mlir::tiny::createLowerToAffinePass());
+  passManager.addPass(mlir::tiny::createLowerToLLVMPass());
+  //passManager.addNestedPass<mlir::StandardOpsDialect>(mlir::createCanonicalizerPass());
+  passManager.addPass(mlir::createCSEPass());
+  //下面这两个是MLIR自带的pass，分别完成了相同循环边界融合优化和对于MemRef的数据流优化功能。
+  mlir::OpPassManager &optPM = passManager.nest<mlir::FuncOp>();
+  //createLoopFusionPass这个pass需要在FuncOp进行变换，所有需要先嵌套一层
+  optPM.addPass(mlir::createLoopFusionPass());
+  //passManager.addPass(mlir::createMemRefDataFlowOptPass());
+
+  if (mlir::failed(passManager.run(*module))) {
+    return 4;
+  }
+
+  return 0;
+}
+
+
+
 int main(int argc, char** argv) {
     // Register any command line options.
     mlir::registerAsmPrinterCLOptions();
     mlir::registerMLIRContextCLOptions();
     mlir::registerPassManagerCLOptions();
     cl::ParseCommandLineOptions(argc, argv, "tiny compiler!\n");
+    mlir::MLIRContext context;
+    if (emitAction >= Action::DumpLLVMFROMMLIR){
+        std::cout << "BBBBBBBBBBBBBBBB" <<std::endl;
+        context.getOrLoadDialect<mlir::tiny::TinyDialect>();
+        context.getOrLoadDialect<mlir::StandardOpsDialect>();
+        mlir::OwningModuleRef module;
+        if (int error = loadAndProcessMLIR(context, module)) {
+          return error;
+        }
+        std::cout << "CCCCCCCCCCCCCCCC" << std::endl;
+        dumpLLVMIR(*module);
+        return 0;
+    } 
+    // the following code is designed for DSL for future.
+    /*
+    else {
+    std::cout << "AAAAAAAAAAAAA" << std::endl;
     auto moduleAST = parseInputFile(inputFilename);
     if (!moduleAST)
         return 1;
@@ -136,10 +224,7 @@ int main(int argc, char** argv) {
         tiny::dump(*moduleAST);
         return 0;
     }
-
-    mlir::MLIRContext context;
     context.getOrLoadDialect<mlir::tiny::TinyDialect>();
-
     mlir::OwningModuleRef module = mlirGen(context, *moduleAST);
     if (!module)
         return 1;
@@ -153,5 +238,7 @@ int main(int argc, char** argv) {
         module->dump();
         return 0;
     }
+    }
+    */
     return 0;
 }
