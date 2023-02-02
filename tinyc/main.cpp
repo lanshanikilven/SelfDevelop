@@ -210,9 +210,9 @@ int main(int argc, char** argv) {
           return error;
         }
         std::cout << "44444444444444" << std::endl;
+        module->dump();
         //dumpLLVMIR(*module);
         //runJIT(*module);
-        module->dump();
         return 0;
     } 
     // the following code is designed for DSL for future.
