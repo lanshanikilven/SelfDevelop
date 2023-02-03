@@ -13,8 +13,8 @@
 #include "mlir/IR/Dialect.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
-/// Include the auto-generated header file containing the declarations of the
-/// toy operations.
+// Include the auto-generated header file containing the declarations of the toy operations.
+// 这两行代码属于固定写法
 #define GET_OP_CLASSES
 #include "tiny/TinyOps.h.inc"
 

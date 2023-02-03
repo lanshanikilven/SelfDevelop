@@ -27,6 +27,8 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include <iostream>
+#include "Graph/GraphDialect.h"
+#include "Graph/GraphOps.h"
 
 using namespace tiny;
 
@@ -178,13 +180,13 @@ int loadAndProcessMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef& module
   module->dump();
   //注意这些pass的变化，针对的都是ModuleOp
   passManager.addPass(mlir::createCanonicalizerPass());
+  passManager.addPass(mlir::createCSEPass());
+  //下面这两个是MLIR自带的pass，分别完成了相同循环边界融合优化和对于MemRef的数据流优化功能。
+  mlir::OpPassManager &optPM = passManager.nest<mlir::FuncOp>();
+  //createLoopFusionPass这个pass需要在FuncOp进行变换，所有需要先嵌套一层
+  optPM.addPass(mlir::createLoopFusionPass());
   //passManager.addPass(mlir::tiny::createLowerToAffinePass());
   //passManager.addPass(mlir::tiny::createLowerToLLVMPass());
-  //passManager.addPass(mlir::createCSEPass());
-  //下面这两个是MLIR自带的pass，分别完成了相同循环边界融合优化和对于MemRef的数据流优化功能。
-  //mlir::OpPassManager &optPM = passManager.nest<mlir::FuncOp>();
-  //createLoopFusionPass这个pass需要在FuncOp进行变换，所有需要先嵌套一层
-  //optPM.addPass(mlir::createLoopFusionPass());
   //passManager.addPass(mlir::createMemRefDataFlowOptPass());
 
   if (mlir::failed(passManager.run(*module))) {
@@ -195,6 +197,10 @@ int loadAndProcessMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef& module
 }
 
 int main(int argc, char** argv) {
+
+    //这里也可以直接暴力将所有MLIR原生的pass全部引入近来，但是会影响整个代码工程的编译和运行效率
+    //mlir::registerAllPasses();
+    //但是我们常规会自己去识别我们需要依赖或者用到的MLIR的原生Pass，然后手动注册添加到这里
     // Register any command line options.
     mlir::registerAsmPrinterCLOptions();
     mlir::registerMLIRContextCLOptions();
@@ -204,14 +210,17 @@ int main(int argc, char** argv) {
     if (emitAction >= Action::DumpLLVMFROMMLIR){
         std::cout << "BBBBBBBBBBBBBBBB" <<std::endl;
         context.getOrLoadDialect<mlir::tiny::TinyDialect>();
-        //context.getOrLoadDialect<mlir::StandardOpsDialect>();
+        context.getOrLoadDialect<mlir::StandardOpsDialect>();
+        context.getOrLoadDialect<mlir::LLVM::LLVMDialect>();
         mlir::OwningModuleRef module;
         if (int error = loadAndProcessMLIR(context, module)) {
           return error;
         }
         std::cout << "44444444444444" << std::endl;
         module->dump();
+        //std::cout << "55555555555555" << std::endl;
         //dumpLLVMIR(*module);
+        //std::cout << "66666666666666" << std::endl;
         //runJIT(*module);
         return 0;
     } 

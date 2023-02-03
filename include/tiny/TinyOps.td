@@ -4,7 +4,28 @@
 include "mlir/IR/OpBase.td"
 include "tiny/TinyDialect.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
+include "mlir/Interfaces/CallInterfaces.td"
 
+/*
+def CastOp : Tiny_Op<"cast", [
+    DeclareOpInterfaceMethods<CastOpInterface>,
+    NoMemoryEffect,
+    SameOperandsAndResultShape]
+  > {
+  let summary = "shape cast operation";
+  let description = [{
+    The "cast" operation converts a tensor from one type to an equivalent type
+    without changing any data elements. The source and destination types
+    must both be tensor types with the same element type. If both are ranked,
+    then shape is required to match. The operation is invalid if converting
+    to a mismatching constant dimension.
+  }];
+
+  let arguments = (ins F64Tensor:$input);
+  let results = (outs F64Tensor:$output);
+  let assemblyFormat = "$input attr-dict `:` type($input) `to` type($output)";
+}
+*/
 
 def TransposeOp : Tiny_Op<"transpose", [NoSideEffect]> {
   let summary = "transpose operation";

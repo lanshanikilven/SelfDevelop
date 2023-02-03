@@ -149,5 +149,8 @@ static mlir::LogicalResult verify(ReturnOp op) {
                         << resultType << ")";
 }
 
+
+
+// 这里是引入了所有TinyOps
 #define GET_OP_CLASSES
 #include "tiny/TinyOps.cpp.inc"

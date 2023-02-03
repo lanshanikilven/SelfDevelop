@@ -13,8 +13,8 @@
 #include "mlir/IR/Dialect.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
-/// Include the auto-generated header file containing the declaration of the toy
-/// dialect.
+// Include the auto-generated header file containing the declaration of the toy dialect.
+// 下面这行代码也是属于固定写法
 #include "tiny/TinyOpsDialect.h.inc"
 
 #endif // TINY_TINYDIALECT_H
