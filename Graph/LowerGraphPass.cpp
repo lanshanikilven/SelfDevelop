@@ -18,61 +18,54 @@
 // This file defines Graph dialect lowering pass.
 //
 //===----------------------------------------------------------------------===//
+#include "tiny/Passes.h"
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/Dialect/Bufferization/Transforms/Bufferize.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
+//#include "mlir/Dialect/Bufferization/Transforms/Bufferize.h"
+//#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/Vector/IR/VectorOps.h"
+#include "mlir/Dialect/Vector/VectorOps.h"
 #include "mlir/Pass/Pass.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 
 #include "Graph/GraphDialect.h"
 #include "Graph/GraphOps.h"
 
-using namespace mlir;
-using namespace graph;
-using namespace vector;
-using namespace mlir::arith;
+
+//using namespace vector;
 
 //===----------------------------------------------------------------------===//
 // Rewrite Pattern
 //===----------------------------------------------------------------------===//
-
-namespace {
-class GraphBFSLowering : public OpRewritePattern<graph::BFSOp> {
+class GraphBFSLowering : public mlir::OpRewritePattern<graph::BFSOp> {
 public:
-  using OpRewritePattern<graph::BFSOp>::OpRewritePattern;
+  using mlir::OpRewritePattern<graph::BFSOp>::OpRewritePattern;
 
-  explicit GraphBFSLowering(MLIRContext *context, int64_t strideParam)
-      : OpRewritePattern(context) {
-    stride = strideParam;
-  }
-
-  LogicalResult matchAndRewrite(graph::BFSOp op,
-                                PatternRewriter &rewriter) const override {
+  mlir::LogicalResult matchAndRewrite(graph::BFSOp op,
+                                mlir::PatternRewriter &rewriter) const override {
     auto loc = op->getLoc();
     auto ctx = op->getContext();
 
     // Create constant indices.
-    Value c0 = rewriter.create<ConstantIndexOp>(loc, 0);
-    Value c1 = rewriter.create<ConstantIndexOp>(loc, 1);
+    mlir::Value c0 = rewriter.create<mlir::ConstantIndexOp>(loc, 0);
+    mlir::Value c1 = rewriter.create<mlir::ConstantIndexOp>(loc, 1);
 
     // Register operand values.
-    Value m1 = op->getOperand(0);
-    Value m2 = op->getOperand(1);
-    Value m3 = op->getOperand(2);
+    mlir::Value m1 = op.getOperand(0);
+    mlir::Value m2 = op.getOperand(1);
+    mlir::Value m3 = op.getOperand(2);
 
     rewriter.eraseOp(op);
-    return success();
+    return mlir::success();
   }
 
 private:
   int64_t stride;
 };
-} // end anonymous namespace
 
-void populateLowerGraphConversionPatterns(RewritePatternSet &patterns,
+
+void populateLowerGraphConversionPatterns(mlir::RewritePatternSet &patterns,
                                           int64_t stride) {
   patterns.add<GraphBFSLowering>(patterns.getContext(), stride);
 }
@@ -83,21 +76,21 @@ void populateLowerGraphConversionPatterns(RewritePatternSet &patterns,
 
 namespace {
 class LowerGraphPass
-    : public PassWrapper<LowerGraphPass, OperationPass<ModuleOp>> {
+    : public mlir::PassWrapper<LowerGraphPass, mlir::OperationPass<mlir::ModuleOp>> {
 public:
   LowerGraphPass() = default;
   LowerGraphPass(const LowerGraphPass &) {}
   explicit LowerGraphPass(int64_t strideParam) { stride = strideParam; }
 
-  StringRef getArgument() const final { return "lower-graph"; }
-  StringRef getDescription() const final { return "Lower Graph Dialect."; }
+  mlir::StringRef getArgument() const final { return "lower-graph"; }
+  mlir::StringRef getDescription() const final { return "Lower Graph Dialect."; }
 
   void runOnOperation() override;
 
-  void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<graph::GraphDialect, func::FuncDialect,
-                    memref::MemRefDialect, scf::SCFDialect, VectorDialect,
-                    AffineDialect, arith::ArithmeticDialect>();
+  void getDependentDialects(mlir::DialectRegistry &registry) const override {
+    registry.insert<graph::GraphDialect, mlir::StandardOpsDialect,
+                    mlir::memref::MemRefDialect, mlir::scf::SCFDialect, mlir::vector::VectorDialect,
+                    mlir::AffineDialect>();
   }
 
   Option<int64_t> stride{*this, "Graph-strip-mining",
@@ -107,24 +100,23 @@ public:
 } // end anonymous namespace.
 
 void LowerGraphPass::runOnOperation() {
-  MLIRContext *context = &getContext();
-  ModuleOp module = getOperation();
+  mlir::MLIRContext *context = &getContext();
+  mlir::ModuleOp module = getOperation();
 
-  ConversionTarget target(*context);
-  target.addLegalDialect<AffineDialect, scf::SCFDialect, func::FuncDialect,
-                         memref::MemRefDialect, VectorDialect,
-                         arith::ArithmeticDialect>();
-  target.addLegalOp<ModuleOp, func::FuncOp, func::ReturnOp>();
+  mlir::ConversionTarget target(*context);
+  target.addLegalDialect<mlir::AffineDialect, mlir::scf::SCFDialect, mlir::StandardOpsDialect,
+                         mlir::memref::MemRefDialect, mlir::vector::VectorDialect>();
+  target.addLegalOp<mlir::ModuleOp,mlir::FuncOp, mlir::LLVM::ReturnOp>();
 
-  RewritePatternSet patterns(context);
+  mlir::RewritePatternSet patterns(context);
   populateLowerGraphConversionPatterns(patterns, stride);
 
   if (failed(applyPartialConversion(module, target, std::move(patterns))))
     signalPassFailure();
 }
 
-namespace mlir {
-namespace graph {
-void registerLowerGraphPass() { PassRegistration<LowerGraphPass>(); }
-} // namespace graph
-} // namespace mlir
+
+std::unique_ptr<mlir::Pass> mlir::graph::registerLowerGraphPass() {
+  return std::make_unique<LowerGraphPass>();
+}
+

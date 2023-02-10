@@ -115,7 +115,7 @@ struct ConstantOpLowering : public mlir::OpRewritePattern<mlir::tiny::ConstantOp
 
 struct ReturnOpLowering : public mlir::OpRewritePattern<mlir::tiny::ReturnOp> {
   using OpRewritePattern<mlir::tiny::ReturnOp>::OpRewritePattern;
-
+  //PatternRewriter有一个保守的假设，就是没有Pattern存在递归，如果检测到递归将发出失败信号
   mlir::LogicalResult matchAndRewrite(mlir::tiny::ReturnOp op, mlir::PatternRewriter &rewriter) const final {
     // During this lowering, we expect that all function calls have been inlined.
     if (op.hasOperand())
@@ -125,6 +125,12 @@ struct ReturnOpLowering : public mlir::OpRewritePattern<mlir::tiny::ReturnOp> {
     rewriter.replaceOpWithNewOp<mlir::ReturnOp>(op);
     return mlir::success();
   }
+  //void initialize() {
+    //setDebugName("ReturnOpLowering"); //在pattern中指定调试名称，这是特定pattern的唯一标志符
+    //addDebugLabels("LowerToAffinePass"); //指定一组调试标签，这是Pattern组的唯一标志符
+    //setHasBoundedRewriteRecursion(); // 表示该pattern可能会发生递归，并且程序能够安全的处理递归
+  //}
+
 };
 
 

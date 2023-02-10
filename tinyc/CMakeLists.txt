@@ -4,6 +4,7 @@ set(LIBS
         ${dialect_libs}
         ${conversion_libs}
         MLIRTiny
+        Graph
         MLIRAnalysis
     MLIRCallInterfaces
     MLIRCastInterfaces
@@ -21,9 +22,17 @@ set(LIBS
     MLIRTransforms
 )
 
-add_llvm_executable(tinyc main.cpp ../parser/AST.cpp)
+add_llvm_executable(tinyc main.cpp ../parser/AST.cpp  ../Graph/LowerGraphPass.cpp)
 
 llvm_update_compile_flags(tinyc)
-target_link_libraries(tinyc PRIVATE ${LIBS})
+
+target_link_libraries(tinyc 
+    PRIVATE ${LIBS}
+    ${dialect_libs}
+    ${conversion_libs}
+    MLIROptLib
+    
+    #LowerGraphPass
+    )
 
 mlir_check_all_link_libraries(tinyc)

@@ -1,38 +1,126 @@
 #include "tiny/TinyOps.h"
 #include "tiny/TinyDialect.h"
-
+#include "tiny/Passes.h"
 
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/OpImplementation.h"
+#include "mlir/IR/Operation.h"
 #include "mlir/IR/PatternMatch.h"
+#include "mlir/Transforms/DialectConversion.h"
+#include "mlir/Interfaces/SideEffectInterfaces.h"
+#include "llvm/ADT/PointerUnion.h"
+#include "mlir/Pass/Pass.h"
+#include "mlir/IR/Matchers.h"
+#include "mlir/IR/Dialect.h"
 #include <iostream>
-
 
 using namespace mlir;
 using namespace mlir::tiny;
 
-struct SimplifyRedundantTranspose : public mlir::OpRewritePattern<tiny::TransposeOp> {
+namespace {
+/// Include the patterns defined in the Declarative Rewrite framework.
+#include "tiny/TinyOps.inc"
+} // end anonymous namespace
+/*
+//ShapeInferencePass继承了FunctionPass，重写其runOnFunction()接口，实现Shape推断算法。
+class ShapeInferencePass : public mlir::PassWrapper<ShapeInferencePass, mlir::OperationPass<mlir::FuncOp>> {
+public:
+  void runOnOperation() final {
+    auto f = getOperation();
+    // Populate the worklist with the operations that need shape inference: these are operations that return a dynamic shape.
+    // 创建一个输出返回值为泛化Tensor的Operation列表
+    llvm::SmallPtrSet<mlir::Operation *, 16> opWorklist;
+    f.walk([&](mlir::Operation *op) {
+      if (returnsDynamicShape(op))
+        opWorklist.insert(op);
+    });
+  
+   // Iterate on the operations in the worklist until all operations have been inferred or no change happened.
+   // 遍历列表寻找输入的操作数时类型确定的Tensor的Operarion
+    while (!opWorklist.empty()) {
+      // Find the next operation ready for inference, that is an operation with all operands already resolved.
+      auto nextop = llvm::find_if(opWorklist, allOperandsInferred);
+      //如果没有找到退出循环
+        if (nextop == opWorklist.end())
+            break;
+        //把该Operation从循环中删除并调用相应的inferShape()函数推断该Operation的输出返回Tensor的shape
+        Operation *op = *nextop;
+        opWorklist.erase(op);
+        // Ask the operation to infer its output shapes.
+
+        if (ShapeInference shapeOp = dyn_cast<ShapeInference>(op)) {
+            shapeOp.inferShapes();
+        } else {
+            op->emitError("unable to infer shape of operation without shape inference interface");
+            return signalPassFailure();
+        }
+    }
+    // If the operation worklist isn't empty, this indicates a failure.
+    if (!opWorklist.empty()) {
+      f.emitError("Shape inference failed, ") << opWorklist.size() << " operations couldn't be inferred\n";
+      signalPassFailure();
+    }
+  }
+  
+  // A utility method that returns if the given operation has all of its operands inferred
+  static bool allOperandsInferred(Operation *op) {
+    return llvm::all_of(op->getOperandTypes(), [](Type operandType) {
+        return operandType.isa<RankedTensorType>();
+    });
+  }
+
+  // A utility method that returns if the given operation has a dynamically shaped result.
+  static bool returnsDynamicShape(Operation *op) {
+    return llvm::any_of(op->getResultTypes(), [](Type resultType) {
+        return !resultType.isa<RankedTensorType>();
+    });
+  }
+};
+
+/// Create a Shape Inference pass.
+std::unique_ptr<mlir::Pass> mlir::tiny::createShapeInferencePass() {
+  return std::make_unique<ShapeInferencePass>();
+}
+*/
+
+// fold transpose(transpose(x)) = x
+// 匹配该IR中的所有 toy.transpose
+struct SimplifyRedundantTranspose
+    : public mlir::OpRewritePattern<tiny::TransposeOp> {
   using OpRewritePattern<tiny::TransposeOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(tiny::TransposeOp op,
                                 PatternRewriter &rewriter) const final {
     mlir::Value transposeInput = op.getOperand();
 
-    std::cout << "333333333333333" << std::endl;
-    tiny::TransposeOp transposeInputOp = transposeInput.getDefiningOp<tiny::TransposeOp>();
+    tiny::TransposeOp transposeInputOp =
+        transposeInput.getDefiningOp<tiny::TransposeOp>();
     if (!transposeInputOp) {
       return failure();
     }
 
-  rewriter.replaceOp(op, {transposeInputOp.getOperand()});
-  return success();
+    rewriter.replaceOp(op, {transposeInputOp.getOperand()});
+    return success();
   }
 };
 
-void TransposeOp::build(mlir::OpBuilder &builder, mlir::OperationState &state, mlir::Value value) {
+void TransposeOp::getCanonicalizationPatterns(mlir::RewritePatternSet &results,
+                                              MLIRContext *context) {
+  // SimplifyRedundantTranspose 就是上面定义的结构体(类)
+  results.insert<SimplifyRedundantTranspose>(context);
+}
+
+void TransposeOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
+                        mlir::Value value) {
   state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
   state.addOperands(value);
+}
+
+void ReshapeOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                            MLIRContext *context) {
+  results.add<ReshapeReshapeOptPattern, RedundantReshapeOptPattern,
+              FoldConstantReshapeOptPattern>(context);
 }
 
 //===----------------------------------------------------------------------===//
@@ -46,12 +134,6 @@ void ConstantOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
   auto dataType = RankedTensorType::get({}, builder.getI32Type());
   auto dataAttribute = DenseIntElementsAttr::get(dataType, value);
   ConstantOp::build(builder, state, dataType, dataAttribute);
-}
-
-void TransposeOp::getCanonicalizationPatterns(mlir::RewritePatternSet &results,
-                                              MLIRContext *context) {
-  // SimplifyRedundantTranspose 就是第一步中定义的结构体(类)
-  results.insert<SimplifyRedundantTranspose>(context);
 }
 
 /// The 'OpAsmParser' class provides a collection of methods for parsing
@@ -111,7 +193,6 @@ static mlir::LogicalResult verify(ConstantOp op) {
   return mlir::success();
 }
 
-
 //===----------------------------------------------------------------------===//
 // ReturnOp
 
@@ -149,7 +230,33 @@ static mlir::LogicalResult verify(ReturnOp op) {
                         << resultType << ")";
 }
 
+//下面两个函数实现了GenericCallOp类的一些功能
+// GenericCallOp::getCallableForCallee() {...} 返回泛化调用Operation的被调用方
+CallInterfaceCallable GenericCallOp::getCallableForCallee() {
+  mlir::Operation *operation;
+  return operation->getAttrOfType<SymbolRefAttr>("callee");
+}
 
+// GenericCallOp::getArgOperands(){...}用来获取被调用函数的参数操作数。
+mlir::Operation::operand_range GenericCallOp::getArgOperands() {
+  return inputs();
+}
+
+//这个方法用来判断是否需要进行类型转换，如果inputs和outputs的类型是兼容的则返回真，否则需要进行类型转换（cast）返回假。
+bool CastOp::areCastCompatible(TypeRange inputs, TypeRange outputs) {
+  if (inputs.size() != 1 || outputs.size() != 1)
+    return false;
+  // The inputs must be Tensors with the same element type.
+  TensorType input = inputs.front().dyn_cast<TensorType>();
+  TensorType output = outputs.front().dyn_cast<TensorType>();
+  if (!input || !output || input.getElementType() != output.getElementType())
+    return false;
+  // The shape is required to match if both types are ranked.
+  return !input.hasRank() || !output.hasRank() || input == output;
+}
+
+//需要进行形状推导的每个Operation，都需要定义对应的inferShapes()函数，比如MulOp，结果的形状就是输入的形状
+//void mlir::tiny::MulOp::inferShapes() { getResult().setType(getOperand().getType()); }
 
 // 这里是引入了所有TinyOps
 #define GET_OP_CLASSES

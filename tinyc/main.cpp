@@ -17,6 +17,7 @@
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/Passes.h"
+#include "mlir/InitAllPasses.h"
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Module.h"
@@ -179,8 +180,16 @@ int loadAndProcessMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef& module
   std::cout << "111111111111111111111" << std::endl;
   module->dump();
   //注意这些pass的变化，针对的都是ModuleOp
-  passManager.addPass(mlir::createCanonicalizerPass());
+
+  //下面这个标准化pass既可以针对ModuleOp，也可以针对FuncOp
+  //passManager.addPass(mlir::createCanonicalizerPass());
+  passManager.addNestedPass<mlir::FuncOp>(mlir::createCanonicalizerPass());
+  //passManager.addPass(mlir::ReshapeReshapeOptPass());
   passManager.addPass(mlir::createCSEPass());
+  //将 inline pass添加到优化过程中，这个pass是针对ModuleOp的pass
+  passManager.addPass(mlir::createInlinerPass());
+  passManager.addPass(mlir::graph::registerLowerGraphPass());
+  //passManager.addPass(mlir::tiny::createShapeInferencePass());
   //下面这两个是MLIR自带的pass，分别完成了相同循环边界融合优化和对于MemRef的数据流优化功能。
   mlir::OpPassManager &optPM = passManager.nest<mlir::FuncOp>();
   //createLoopFusionPass这个pass需要在FuncOp进行变换，所有需要先嵌套一层
@@ -199,7 +208,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef& module
 int main(int argc, char** argv) {
 
     //这里也可以直接暴力将所有MLIR原生的pass全部引入近来，但是会影响整个代码工程的编译和运行效率
-    //mlir::registerAllPasses();
+    mlir::registerAllPasses();
     //但是我们常规会自己去识别我们需要依赖或者用到的MLIR的原生Pass，然后手动注册添加到这里
     // Register any command line options.
     mlir::registerAsmPrinterCLOptions();
@@ -212,6 +221,7 @@ int main(int argc, char** argv) {
         context.getOrLoadDialect<mlir::tiny::TinyDialect>();
         context.getOrLoadDialect<mlir::StandardOpsDialect>();
         context.getOrLoadDialect<mlir::LLVM::LLVMDialect>();
+        
         mlir::OwningModuleRef module;
         if (int error = loadAndProcessMLIR(context, module)) {
           return error;
