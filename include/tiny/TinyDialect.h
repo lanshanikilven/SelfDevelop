@@ -14,10 +14,11 @@
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/Interfaces/CastInterfaces.h"
+#include "mlir/IR/OpDefinition.h"
+
 
 // Include the auto-generated header file containing the declaration of the toy dialect.
 // 下面这行代码也是属于固定写法
 #include "tiny/TinyOpsDialect.h.inc"
-#include "tiny/ShapeInferenceInterface.h.inc"
 
 #endif // TINY_TINYDIALECT_H

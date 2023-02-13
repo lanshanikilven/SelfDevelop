@@ -230,11 +230,20 @@ static mlir::LogicalResult verify(ReturnOp op) {
                         << resultType << ")";
 }
 
+
 //下面两个函数实现了GenericCallOp类的一些功能
+void GenericCallOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
+                          StringRef callee, ArrayRef<mlir::Value> arguments) {
+  // Generic call always returns an unranked Tensor initially.
+  state.addTypes(UnrankedTensorType::get(builder.getI32Type()));
+  state.addOperands(arguments);
+  state.addAttribute("callee", builder.getSymbolRefAttr(callee));
+}
+
+
 // GenericCallOp::getCallableForCallee() {...} 返回泛化调用Operation的被调用方
 CallInterfaceCallable GenericCallOp::getCallableForCallee() {
-  mlir::Operation *operation;
-  return operation->getAttrOfType<SymbolRefAttr>("callee");
+  return (*this)->getAttrOfType<SymbolRefAttr>("callee");
 }
 
 // GenericCallOp::getArgOperands(){...}用来获取被调用函数的参数操作数。
@@ -255,8 +264,67 @@ bool CastOp::areCastCompatible(TypeRange inputs, TypeRange outputs) {
   return !input.hasRank() || !output.hasRank() || input == output;
 }
 
+
+void MulOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
+                  mlir::Value lhs, mlir::Value rhs) {
+  state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
+  state.addOperands({lhs, rhs});
+}
+
 //需要进行形状推导的每个Operation，都需要定义对应的inferShapes()函数，比如MulOp，结果的形状就是输入的形状
-//void mlir::tiny::MulOp::inferShapes() { getResult().setType(getOperand().getType()); }
+void mlir::tiny::MulOp::inferShapes() { getResult().setType(getOperand(0).getType()); }
+
+//需要进行形状推导的每个Operation，都需要定义对应的inferShapes()函数，比如CastOp，结果的形状就是输入的形状
+//void mlir::tiny::CastOp::inferShapes() { getResult().setType(getOperand().getType()); }
+
+/// A generalized parser for binary operations. This parses the different forms
+/// of 'printBinaryOp' below.
+static mlir::ParseResult parseBinaryOp(mlir::OpAsmParser &parser,
+                                       mlir::OperationState &result) {
+  mlir::SmallVector<mlir::OpAsmParser::OperandType, 2> operands;
+  llvm::SMLoc operandsLoc = parser.getCurrentLocation();
+  mlir::Type type;
+  if (parser.parseOperandList(operands, /*requiredOperandCount=*/2) ||
+      parser.parseOptionalAttrDict(result.attributes) ||
+      parser.parseColonType(type))
+    return mlir::failure();
+
+  // If the type is a function type, it contains the input and result types of
+  // this operation.
+  if (mlir::FunctionType funcType = type.dyn_cast<mlir::FunctionType>()) {
+    if (parser.resolveOperands(operands, funcType.getInputs(), operandsLoc,
+                               result.operands))
+      return mlir::failure();
+    result.addTypes(funcType.getResults());
+    return mlir::success();
+  }
+
+  // Otherwise, the parsed type is the type of both operands and results.
+  if (parser.resolveOperands(operands, type, result.operands))
+    return mlir::failure();
+  result.addTypes(type);
+  return mlir::success();
+}
+
+/// A generalized printer for binary operations. It prints in two different
+/// forms depending on if all of the types match.
+static void printBinaryOp(mlir::OpAsmPrinter &printer, mlir::Operation *op) {
+  printer << op->getName() << " " << op->getOperands();
+  printer.printOptionalAttrDict(op->getAttrs());
+  printer << " : ";
+
+  // If all of the types are the same, print the type directly.
+  mlir::Type resultType = *op->result_type_begin();
+  if (llvm::all_of(op->getOperandTypes(),
+                   [=](mlir::Type type) { return type == resultType; })) {
+    printer << resultType;
+    return;
+  }
+  // Otherwise, print a functional type.
+  printer.printFunctionalType(op->getOperandTypes(), op->getResultTypes());
+}
+
+
 
 // 这里是引入了所有TinyOps
 #define GET_OP_CLASSES

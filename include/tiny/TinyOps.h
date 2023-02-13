@@ -13,6 +13,8 @@
 #include "mlir/IR/Dialect.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
+#include "mlir/IR/OpDefinition.h"
+#include "tiny/ShapeInferenceInterface.h.inc"
 
 // Include the auto-generated header file containing the declarations of the toy operations.
 // 这两行代码属于固定写法

@@ -17,7 +17,7 @@
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/Passes.h"
-#include "mlir/InitAllPasses.h"
+//#include "mlir/InitAllPasses.h"
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Module.h"
@@ -184,7 +184,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef& module
   //下面这个标准化pass既可以针对ModuleOp，也可以针对FuncOp
   //passManager.addPass(mlir::createCanonicalizerPass());
   passManager.addNestedPass<mlir::FuncOp>(mlir::createCanonicalizerPass());
-  //passManager.addPass(mlir::ReshapeReshapeOptPass());
   passManager.addPass(mlir::createCSEPass());
   //将 inline pass添加到优化过程中，这个pass是针对ModuleOp的pass
   passManager.addPass(mlir::createInlinerPass());
@@ -208,7 +207,7 @@ int loadAndProcessMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef& module
 int main(int argc, char** argv) {
 
     //这里也可以直接暴力将所有MLIR原生的pass全部引入近来，但是会影响整个代码工程的编译和运行效率
-    mlir::registerAllPasses();
+    //mlir::registerAllPasses();
     //但是我们常规会自己去识别我们需要依赖或者用到的MLIR的原生Pass，然后手动注册添加到这里
     // Register any command line options.
     mlir::registerAsmPrinterCLOptions();

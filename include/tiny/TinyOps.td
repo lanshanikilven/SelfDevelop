@@ -8,16 +8,15 @@ include "mlir/Interfaces/InferTypeOpInterface.td"
 include "mlir/Interfaces/CallInterfaces.td"
 include "mlir/Interfaces/CastInterfaces.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
+include "tiny/ShapeInferenceInterface.td"
 
-//include "tiny/ShapeInferenceInterface.td"
 
-/*
 //每个Op在定义后，tablegen会根据Op的参数和返回值自动生成一些builder方法。
 //在编译之后，会在builder目录下的include文件夹中的**.h.inc文件中自动产生对应的static 的builder方法的声明，并不需要实例化对象再去调用。
 //但是如果默认生成的builder方法中没有我们需要使用的方法，则我们需要在td文件中自定义let builders方法
 //为Mul Operation添加了形状推导的特征
 def MulOp : Tiny_Op<"mul", [NoSideEffect, 
-  //DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
+  DeclareOpInterfaceMethods<ShapeInferenceOpInterface>
   ]> {
   let summary = "element wise mul operation";
   let description = [{
@@ -27,7 +26,7 @@ def MulOp : Tiny_Op<"mul", [NoSideEffect,
   let arguments = (ins I32Tensor:$lhs, I32Tensor:$rhs);
   let results = (outs I32Tensor:$output);
   //let assemblyFormat = "$input attr-dict `:` type($input) `to` type($output)";
-  let parser  = [{ return ::parserBinaryOp(parser, result); }];
+  let parser  = [{ return ::parseBinaryOp(parser, result); }];
   let printer = [{ return ::printBinaryOp(p,  *this); }];
   //下面这个语句生成对应的builder方法声明为：static void build(::mlir::OpBuilder &builder, ::mlir::OperationState &state, ::mlir::Value lhs, ::mlir::Value rhs)
   //为了能够通过该方法构建Operation，必须向​​state​​​填充该Operation的属性，操作数，域和返回值类型。
@@ -35,7 +34,7 @@ def MulOp : Tiny_Op<"mul", [NoSideEffect,
     OpBuilder<(ins  "mlir::Value": $lhs, "mlir::Value": $rhs)>
   ];
 }
-*/
+
 
 //在函数调用时，输入张量的类型是确定的。但在函数声明/定义的时候，输入张量的类型是不确定的。
 //因此在调用的时候就需要一个隐藏的数据类型转换，否则无法进行内联操作，因此这里引入了一个cast。
@@ -232,7 +231,5 @@ def GenericCallOp : Tiny_Op<"generic_call", [DeclareOpInterfaceMethods<CallOpInt
     OpBuilder<(ins "StringRef " : $callee, "ArrayRef<Value>" : $arguments) >
   ];
 }
-
-
 
 #endif //TINY_TINYOPS_H

@@ -9,7 +9,7 @@
 #include "mlir/Transforms/InliningUtils.h"
 #include "llvm/ADT/ArrayRef.h"
 
-
+#include "tiny/TinyOps.cpp.inc"
 //这部分代码为Toy Operation定义了inline的接口和表达式变形规则，两个isLegalToInline重载函数是两个hook
 struct ToyInlinerInterface : public mlir::DialectInlinerInterface {
   using mlir::DialectInlinerInterface::DialectInlinerInterface;
@@ -25,6 +25,7 @@ struct ToyInlinerInterface : public mlir::DialectInlinerInterface {
                        mlir::BlockAndValueMapping &) const final {
     return true;
   }
+
   // handleTerminator函数只是处理tiny.return，将返回操作的操作数it.index()直接用返回值it.value()代替
   void handleTerminator(mlir::Operation *op,
                         llvm::ArrayRef<mlir::Value> valuesToRepl) const final {
@@ -53,7 +54,6 @@ void mlir::tiny::TinyDialect::initialize() {
 #include "tiny/TinyOps.cpp.inc"
       >();
   // 这里将上面的ToyInlinerInterface注册到內联pass中
-  addInterfaces<ToyInlinerInterface>(); //这里的addInterfaces不是必须的
+  addInterfaces<ToyInlinerInterface>(); //这里的addInterfaces并不是对于每种op都是必须的
 }
-
 
