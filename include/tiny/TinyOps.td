@@ -43,7 +43,7 @@ def MulOp : Tiny_Op<"mul", [NoSideEffect,
 def CastOp : Tiny_Op<"cast", [
   //DeclareOpInterfaceMethods封装的是专用类trait，需要显式调用
     DeclareOpInterfaceMethods<CastOpInterface>,
-    //DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
+    DeclareOpInterfaceMethods<ShapeInferenceOpInterface>,
     //下面这两个是通用类trait，对所有op都可以使用，不需要专门为op定义相应的接口，而且会被mlir内部直接调用
     NoSideEffect,
     SameOperandsAndResultShape]
@@ -83,7 +83,8 @@ def ReshapeOp : Tiny_Op<"reshape", [NoSideEffect]> {
 }
 
 
-def TransposeOp : Tiny_Op<"transpose", [NoSideEffect]> {
+def TransposeOp : Tiny_Op<"transpose", [NoSideEffect,
+DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
   let summary = "transpose operation";
   let arguments = (ins I32Tensor:$input);
   let results = (outs I32Tensor);
@@ -217,7 +218,9 @@ def FoldConstantReshapeOptPattern : Pat<(ReshapeOp:$res (ConstantOp $arg)), (Con
 // 需要让內联器知道IR中的tiny.generic_call表示的是调用一个函数
 // MLIR提供了一个Operation接口CallOpInterface可以将某个Operation标记为调用。
 // 使用了DeclareOpInterfaceMethods在CallOpInterface的声明中 声明采用的接口方法
-def GenericCallOp : Tiny_Op<"generic_call", [DeclareOpInterfaceMethods<CallOpInterface>] > {
+def GenericCallOp : Tiny_Op<"generic_call", [NoSideEffect,
+  DeclareOpInterfaceMethods<CallOpInterface>
+  ] > {
   let summary =  "generic call operation";
   let description = [{
       The generic call operation can be expand in the positon where it is called.

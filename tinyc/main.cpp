@@ -183,16 +183,21 @@ int loadAndProcessMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef& module
 
   //下面这个标准化pass既可以针对ModuleOp，也可以针对FuncOp
   //passManager.addPass(mlir::createCanonicalizerPass());
-  passManager.addNestedPass<mlir::FuncOp>(mlir::createCanonicalizerPass());
-  passManager.addPass(mlir::createCSEPass());
+  //passManager.addNestedPass<mlir::FuncOp>(mlir::createCanonicalizerPass());
+  
   //将 inline pass添加到优化过程中，这个pass是针对ModuleOp的pass
+  // Inline all functions into main and then delete them.
   passManager.addPass(mlir::createInlinerPass());
+  passManager.addPass(mlir::createSymbolDCEPass());
   passManager.addPass(mlir::graph::registerLowerGraphPass());
-  //passManager.addPass(mlir::tiny::createShapeInferencePass());
   //下面这两个是MLIR自带的pass，分别完成了相同循环边界融合优化和对于MemRef的数据流优化功能。
   mlir::OpPassManager &optPM = passManager.nest<mlir::FuncOp>();
   //createLoopFusionPass这个pass需要在FuncOp进行变换，所有需要先嵌套一层
   optPM.addPass(mlir::createLoopFusionPass());
+  optPM.addPass(mlir::tiny::createShapeInferencePass());
+  optPM.addPass(mlir::createCSEPass());
+  optPM.addPass(mlir::createCanonicalizerPass());
+  
   //passManager.addPass(mlir::tiny::createLowerToAffinePass());
   //passManager.addPass(mlir::tiny::createLowerToLLVMPass());
   //passManager.addPass(mlir::createMemRefDataFlowOptPass());

@@ -1,6 +1,7 @@
 #include "tiny/TinyOps.h"
 #include "tiny/TinyDialect.h"
 #include "tiny/Passes.h"
+#include "tiny/ShapeInferenceInterface.cpp.inc"
 
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -13,6 +14,7 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/IR/Dialect.h"
+
 #include <iostream>
 
 using namespace mlir;
@@ -21,59 +23,66 @@ using namespace mlir::tiny;
 namespace {
 /// Include the patterns defined in the Declarative Rewrite framework.
 #include "tiny/TinyOps.inc"
-} // end anonymous namespace
-/*
+}
+
 //ShapeInferencePass继承了FunctionPass，重写其runOnFunction()接口，实现Shape推断算法。
-class ShapeInferencePass : public mlir::PassWrapper<ShapeInferencePass, mlir::OperationPass<mlir::FuncOp>> {
+class ShapeInferencePass
+    : public mlir::PassWrapper<ShapeInferencePass, FunctionPass> {
 public:
-  void runOnOperation() final {
-    auto f = getOperation();
-    // Populate the worklist with the operations that need shape inference: these are operations that return a dynamic shape.
-    // 创建一个输出返回值为泛化Tensor的Operation列表
+  void runOnFunction() override {
+    auto f = getFunction();
+
+    // Populate the worklist with the operations that need shape inference:
+    // these are operations that return a dynamic shape.
     llvm::SmallPtrSet<mlir::Operation *, 16> opWorklist;
     f.walk([&](mlir::Operation *op) {
       if (returnsDynamicShape(op))
         opWorklist.insert(op);
     });
-  
-   // Iterate on the operations in the worklist until all operations have been inferred or no change happened.
-   // 遍历列表寻找输入的操作数时类型确定的Tensor的Operarion
-    while (!opWorklist.empty()) {
-      // Find the next operation ready for inference, that is an operation with all operands already resolved.
-      auto nextop = llvm::find_if(opWorklist, allOperandsInferred);
-      //如果没有找到退出循环
-        if (nextop == opWorklist.end())
-            break;
-        //把该Operation从循环中删除并调用相应的inferShape()函数推断该Operation的输出返回Tensor的shape
-        Operation *op = *nextop;
-        opWorklist.erase(op);
-        // Ask the operation to infer its output shapes.
 
-        if (ShapeInference shapeOp = dyn_cast<ShapeInference>(op)) {
-            shapeOp.inferShapes();
-        } else {
-            op->emitError("unable to infer shape of operation without shape inference interface");
-            return signalPassFailure();
-        }
+    // Iterate on the operations in the worklist until all operations have been
+    // inferred or no change happened (fix point).
+    while (!opWorklist.empty()) {
+      // Find the next operation ready for inference, that is an operation
+      // with all operands already resolved (non-generic).
+      auto nextop = llvm::find_if(opWorklist, allOperandsInferred);
+      if (nextop == opWorklist.end())
+        break;
+
+      Operation *op = *nextop;
+      opWorklist.erase(op);
+
+      // Ask the operation to infer its output shapes.
+      if (auto shapeOp = dyn_cast<ShapeInference>(op)) {
+        shapeOp.inferShapes();
+      } else {
+        op->emitError("unable to infer shape of operation without shape "
+                      "inference interface");
+        return signalPassFailure();
+      }
     }
+
     // If the operation worklist isn't empty, this indicates a failure.
-    if (!opWorklist.empty()) {
-      f.emitError("Shape inference failed, ") << opWorklist.size() << " operations couldn't be inferred\n";
-      signalPassFailure();
-    }
+    //if (!opWorklist.empty()) {
+    //  f.emitError("Shape inference failed, ")
+         // << opWorklist.size() << " operations couldn't be inferred\n";
+      //signalPassFailure();
+    //}
   }
-  
-  // A utility method that returns if the given operation has all of its operands inferred
+
+  /// A utility method that returns if the given operation has all of its
+  /// operands inferred.
   static bool allOperandsInferred(Operation *op) {
     return llvm::all_of(op->getOperandTypes(), [](Type operandType) {
-        return operandType.isa<RankedTensorType>();
+      return operandType.isa<RankedTensorType>();
     });
   }
 
-  // A utility method that returns if the given operation has a dynamically shaped result.
+  /// A utility method that returns if the given operation has a dynamically
+  /// shaped result.
   static bool returnsDynamicShape(Operation *op) {
     return llvm::any_of(op->getResultTypes(), [](Type resultType) {
-        return !resultType.isa<RankedTensorType>();
+      return !resultType.isa<RankedTensorType>();
     });
   }
 };
@@ -82,7 +91,7 @@ public:
 std::unique_ptr<mlir::Pass> mlir::tiny::createShapeInferencePass() {
   return std::make_unique<ShapeInferencePass>();
 }
-*/
+
 
 // fold transpose(transpose(x)) = x
 // 匹配该IR中的所有 toy.transpose
@@ -113,7 +122,7 @@ void TransposeOp::getCanonicalizationPatterns(mlir::RewritePatternSet &results,
 
 void TransposeOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
                         mlir::Value value) {
-  state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
+  state.addTypes(UnrankedTensorType::get(builder.getI32Type()));
   state.addOperands(value);
 }
 
@@ -267,7 +276,7 @@ bool CastOp::areCastCompatible(TypeRange inputs, TypeRange outputs) {
 
 void MulOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
                   mlir::Value lhs, mlir::Value rhs) {
-  state.addTypes(UnrankedTensorType::get(builder.getF64Type()));
+  state.addTypes(UnrankedTensorType::get(builder.getI32Type()));
   state.addOperands({lhs, rhs});
 }
 
@@ -275,7 +284,16 @@ void MulOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
 void mlir::tiny::MulOp::inferShapes() { getResult().setType(getOperand(0).getType()); }
 
 //需要进行形状推导的每个Operation，都需要定义对应的inferShapes()函数，比如CastOp，结果的形状就是输入的形状
-//void mlir::tiny::CastOp::inferShapes() { getResult().setType(getOperand().getType()); }
+void mlir::tiny::CastOp::inferShapes() { getResult().setType(getOperand().getType()); }
+
+void mlir::tiny::TransposeOp::inferShapes() {
+  auto arrayTy = getOperand().getType().cast<RankedTensorType>();
+  SmallVector<int64_t, 2> dims(llvm::reverse(arrayTy.getShape()));
+  getResult().setType(RankedTensorType::get(dims, arrayTy.getElementType()));
+}
+
+//void ShapeInference::inferShapes() { getResult().setType(getOperand().getType()); }
+
 
 /// A generalized parser for binary operations. This parses the different forms
 /// of 'printBinaryOp' below.

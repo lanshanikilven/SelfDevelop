@@ -10,7 +10,7 @@ namespace tiny {
 /// for a subset of the Toy IR (e.g. matmul).
 std::unique_ptr<mlir::Pass> createLowerToAffinePass();
 std::unique_ptr<mlir::Pass> createLowerToLLVMPass();
-//std::unique_ptr<mlir::Pass> createShapeInferencePass();
+std::unique_ptr<mlir::Pass> createShapeInferencePass();
 }   // namespace tiny
 
 namespace graph {
