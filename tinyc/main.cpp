@@ -165,7 +165,7 @@ int loadMLIRFromFile(mlir::MLIRContext &context, mlir::OwningModuleRef& module) 
     if (!module) {
         llvm::errs() << "Error can't load file " << inputFilename << "\n";
         return 3;
-    }
+    } 
     return 0;
 }
 
@@ -178,7 +178,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef& module
   mlir::applyPassManagerCLOptions(passManager);
   std::cout << "original MLIR: " << std::endl;
   module->dump();
-  //注意这些pass的变化，针对的都是ModuleOp
 
   //下面这个标准化pass既可以针对ModuleOp，也可以针对FuncOp
   passManager.addPass(mlir::createCanonicalizerPass());
@@ -211,7 +210,6 @@ int loadAndProcessMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef& module
 }
 
 int main(int argc, char** argv) {
-
     //这里也可以直接暴力将所有MLIR原生的pass全部引入近来，但是会影响整个代码工程的编译和运行效率
     //mlir::registerAllPasses();
     //但是我们常规会自己去识别我们需要依赖或者用到的MLIR的原生Pass，然后手动注册添加到这里
@@ -222,11 +220,9 @@ int main(int argc, char** argv) {
     cl::ParseCommandLineOptions(argc, argv, "tiny compiler!\n");
     mlir::MLIRContext context;
     if (emitAction >= Action::DumpLLVMFROMMLIR){
-        std::cout << "BBBBBBBBBBBBBBBB" <<std::endl;
         context.getOrLoadDialect<mlir::tiny::TinyDialect>();
         context.getOrLoadDialect<mlir::StandardOpsDialect>();
         context.getOrLoadDialect<mlir::LLVM::LLVMDialect>();
-        
         mlir::OwningModuleRef module;
         if (int error = loadAndProcessMLIR(context, module)) {
           return error;

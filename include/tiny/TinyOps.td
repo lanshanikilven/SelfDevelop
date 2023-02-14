@@ -14,8 +14,8 @@ include "tiny/ShapeInferenceInterface.td"
 //每个Op在定义后，tablegen会根据Op的参数和返回值自动生成一些builder方法。
 //在编译之后，会在builder目录下的include文件夹中的**.h.inc文件中自动产生对应的static 的builder方法的声明，并不需要实例化对象再去调用。
 //但是如果默认生成的builder方法中没有我们需要使用的方法，则我们需要在td文件中自定义let builders方法
-//为Mul Operation添加了形状推导的特征
 def MulOp : Tiny_Op<"mul", [NoSideEffect, 
+  //为Mul Operation添加了形状推导的特征
   DeclareOpInterfaceMethods<ShapeInferenceOpInterface>
   ]> {
   let summary = "element wise mul operation";
@@ -35,8 +35,7 @@ def MulOp : Tiny_Op<"mul", [NoSideEffect,
   ];
 }
 
-def AddOp : Tiny_Op<"add",
-    [NoSideEffect, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
+def AddOp : Tiny_Op<"add", [NoSideEffect, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
   let summary = "element-wise addition operation";
   let description = [{
     The "add" operation performs element-wise addition between two tensors.
