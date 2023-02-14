@@ -100,13 +100,12 @@ int runJIT(mlir::ModuleOp module) {
   llvm::InitializeNativeTarget();
   llvm::InitializeNativeTargetAsmPrinter();
 
-  // Register the translation from MLIR to LLVM IR, which must happen before we
-  // can JIT-compile.
+  // Register the translation from MLIR to LLVM IR, which must happen before we can JIT-compile.
   mlir::registerLLVMDialectTranslation(*module->getContext());
 
   // An optimization pipeline to use within the execution engine.
   auto optPipeline = mlir::makeOptimizingTransformer(
-      /*optLevel=*/0, /*sizeLevel=*/0,
+      /*optLevel=*/3, /*sizeLevel=*/0,
       /*targetMachine=*/nullptr);
 
   // Create an MLIR execution engine. The execution engine eagerly JIT-compiles
@@ -143,7 +142,7 @@ int dumpLLVMIR(mlir::ModuleOp module) {
   mlir::ExecutionEngine::setupTargetTriple(llvmModule.get());
 
   // Optionally run an optimization pipeline over the llvm module.
-  auto optPipeline = mlir::makeOptimizingTransformer(0, 0, nullptr);
+  auto optPipeline = mlir::makeOptimizingTransformer(3, 0, nullptr);
   if (auto err = optPipeline(llvmModule.get())) {
     llvm::errs() << "Failed to optimize LLVM IR " << err << "\n";
     return -1;
@@ -234,10 +233,10 @@ int main(int argc, char** argv) {
         }
         std::cout << "after processing the MLIR is like: " << std::endl;
         module->dump();
-        //std::cout << "55555555555555" << std::endl;
-        //dumpLLVMIR(*module);
-        //std::cout << "66666666666666" << std::endl;
-        //runJIT(*module);
+        std::cout << "llvm ir is like: " << std::endl;
+        dumpLLVMIR(*module);
+        std::cout << "run jit result: " << std::endl;
+        runJIT(*module);
         return 0;
     } 
     // the following code is designed for DSL for future.
