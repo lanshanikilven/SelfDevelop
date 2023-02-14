@@ -35,6 +35,26 @@ def MulOp : Tiny_Op<"mul", [NoSideEffect,
   ];
 }
 
+def AddOp : Tiny_Op<"add",
+    [NoSideEffect, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
+  let summary = "element-wise addition operation";
+  let description = [{
+    The "add" operation performs element-wise addition between two tensors.
+    The shapes of the tensor operands are expected to match.
+  }];
+
+  let arguments = (ins I32Tensor:$lhs, I32Tensor:$rhs);
+  let results = (outs I32Tensor);
+
+  // Specify a parser and printer method.
+  let parser = [{ return ::parseBinaryOp(parser, result); }];
+  let printer = [{ return ::printBinaryOp(p, *this); }];
+
+  // Allow building an AddOp with from the two input operands.
+  let builders = [
+    OpBuilder<(ins "Value":$lhs, "Value":$rhs)>
+  ];
+}
 
 //在函数调用时，输入张量的类型是确定的。但在函数声明/定义的时候，输入张量的类型是不确定的。
 //因此在调用的时候就需要一个隐藏的数据类型转换，否则无法进行内联操作，因此这里引入了一个cast。

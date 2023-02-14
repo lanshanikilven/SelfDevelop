@@ -66,7 +66,7 @@ public:
         loc, rewriter, "nl", mlir::StringRef("\n\0", 2), parentModule);
 
     // Create a loop for each of the dimensions within the shape.
-    mlir::SmallVector<mlir::Value, 4> loopIvs;
+     llvm::SmallVector<mlir::Value, 4> loopIvs;
     for (unsigned i = 0, e = memRefShape.size(); i != e; ++i) {
       auto lowerBound = rewriter.create<mlir::ConstantIndexOp>(loc, 0);
       auto upperBound = rewriter.create<mlir::ConstantIndexOp>(loc, memRefShape[i]);
@@ -101,10 +101,8 @@ public:
   }
 
 private:
-  /// Return a symbol reference to the printf function, inserting it into the
-  /// module if necessary.
-  static mlir::FlatSymbolRefAttr getOrInsertPrintf(mlir::PatternRewriter &rewriter,
-                                             mlir::ModuleOp module) {
+  // Return a symbol reference to the printf function, inserting it into the module if necessary.
+  static mlir::FlatSymbolRefAttr getOrInsertPrintf(mlir::PatternRewriter &rewriter, mlir::ModuleOp module) {
     auto *context = module.getContext();
     if (module.lookupSymbol<mlir::LLVM::LLVMFuncOp>("printf"))
       return mlir::SymbolRefAttr::get(context, "printf");
@@ -113,8 +111,7 @@ private:
     //   * `i32 (i8*, ...)`
     auto llvmI32Ty = mlir::IntegerType::get(context, 32);
     auto llvmI8PtrTy = mlir::LLVM::LLVMPointerType::get(mlir::IntegerType::get(context, 8));
-    auto llvmFnType = mlir::LLVM::LLVMFunctionType::get(llvmI32Ty, llvmI8PtrTy,
-                                                  /*isVarArg=*/true);
+    auto llvmFnType = mlir::LLVM::LLVMFunctionType::get(llvmI32Ty, llvmI8PtrTy, /*isVarArg=*/true);
 
     // Insert the printf function into the body of the parent module.
     mlir::PatternRewriter::InsertionGuard insertGuard(rewriter);
@@ -173,7 +170,8 @@ void ToyToLLVMLoweringPass::runOnOperation() {
   // the LLVM dialect.
   mlir::LLVMConversionTarget target(getContext());
   target.addLegalOp<mlir::ModuleOp>();
-  target.addLegalOp<mlir::tiny::TransposeOp>();
+  target.addLegalDialect<mlir::LLVM::LLVMDialect>();
+  //target.addLegalOp<mlir::tiny::TransposeOp>();
   // During this lowering, we will also be lowering the MemRef types, that are
   // currently being operated on, to a representation in LLVM. To perform this
   // conversion we use a TypeConverter as part of the lowering. This converter
@@ -195,8 +193,7 @@ void ToyToLLVMLoweringPass::runOnOperation() {
   populateMemRefToLLVMConversionPatterns(typeConverter, patterns);
   populateStdToLLVMConversionPatterns(typeConverter, patterns);
 
-  // The only remaining operation to lower from the `toy` dialect, is the
-  // PrintOp.
+  // The only remaining operation to lower from the `toy` dialect, is the PrintOp.
   patterns.add<PrintOpLowering>(&getContext());
 
   // We want to completely lower to LLVM, so we use a `FullConversion`. This

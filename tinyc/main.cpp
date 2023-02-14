@@ -177,14 +177,13 @@ int loadAndProcessMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef& module
   // Register passes to be applied in this compile process
   mlir::PassManager passManager(&context);
   mlir::applyPassManagerCLOptions(passManager);
-  std::cout << "111111111111111111111" << std::endl;
+  std::cout << "original MLIR: " << std::endl;
   module->dump();
   //注意这些pass的变化，针对的都是ModuleOp
 
   //下面这个标准化pass既可以针对ModuleOp，也可以针对FuncOp
-  //passManager.addPass(mlir::createCanonicalizerPass());
+  passManager.addPass(mlir::createCanonicalizerPass());
   //passManager.addNestedPass<mlir::FuncOp>(mlir::createCanonicalizerPass());
-  
   //将 inline pass添加到优化过程中，这个pass是针对ModuleOp的pass
   // Inline all functions into main and then delete them.
   passManager.addPass(mlir::createInlinerPass());
@@ -193,14 +192,17 @@ int loadAndProcessMLIR(mlir::MLIRContext &context, mlir::OwningModuleRef& module
   //下面这两个是MLIR自带的pass，分别完成了相同循环边界融合优化和对于MemRef的数据流优化功能。
   mlir::OpPassManager &optPM = passManager.nest<mlir::FuncOp>();
   //createLoopFusionPass这个pass需要在FuncOp进行变换，所有需要先嵌套一层
-  optPM.addPass(mlir::createLoopFusionPass());
   optPM.addPass(mlir::tiny::createShapeInferencePass());
   optPM.addPass(mlir::createCSEPass());
-  optPM.addPass(mlir::createCanonicalizerPass());
+  optPM.addPass(mlir::tiny::createLowerToAffinePass());
+  //这个pass仅仅只是把affine的循环进行融合
+  optPM.addPass(mlir::createLoopFusionPass());
+  //下面这个pass把融合之后的循环里面的多余的op给消除掉
+  optPM.addPass(mlir::createAffineScalarReplacementPass());
+  //optPM.addPass(mlir::createCanonicalizerPass());
   
-  //passManager.addPass(mlir::tiny::createLowerToAffinePass());
-  //passManager.addPass(mlir::tiny::createLowerToLLVMPass());
-  //passManager.addPass(mlir::createMemRefDataFlowOptPass());
+  passManager.addPass(mlir::tiny::createLowerToLLVMPass());
+  passManager.addPass(mlir::createNormalizeMemRefsPass());
 
   if (mlir::failed(passManager.run(*module))) {
     return 4;
@@ -230,7 +232,7 @@ int main(int argc, char** argv) {
         if (int error = loadAndProcessMLIR(context, module)) {
           return error;
         }
-        std::cout << "44444444444444" << std::endl;
+        std::cout << "after processing the MLIR is like: " << std::endl;
         module->dump();
         //std::cout << "55555555555555" << std::endl;
         //dumpLLVMIR(*module);

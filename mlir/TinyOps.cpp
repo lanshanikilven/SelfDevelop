@@ -283,6 +283,8 @@ void MulOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
 //需要进行形状推导的每个Operation，都需要定义对应的inferShapes()函数，比如MulOp，结果的形状就是输入的形状
 void mlir::tiny::MulOp::inferShapes() { getResult().setType(getOperand(0).getType()); }
 
+void mlir::tiny::AddOp::inferShapes() { getResult().setType(getOperand(0).getType()); }
+
 //需要进行形状推导的每个Operation，都需要定义对应的inferShapes()函数，比如CastOp，结果的形状就是输入的形状
 void mlir::tiny::CastOp::inferShapes() { getResult().setType(getOperand().getType()); }
 
